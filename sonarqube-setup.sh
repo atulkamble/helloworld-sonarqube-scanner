@@ -119,9 +119,9 @@ echo "Installing PostgreSQL..."
 if [[ "$OS" == *"Ubuntu"* ]] || [[ "$OS" == *"Debian"* ]]; then
     sudo apt-get install -y postgresql postgresql-contrib
 elif [[ "$OS" == *"Amazon"* ]] || [[ "$OS" == *"CentOS"* ]] || [[ "$OS" == *"Red Hat"* ]]; then
-    if sudo yum install -y postgresql-server postgresql-contrib; then
-        PG_SERVICE="postgresql"
-    else
+if sudo yum install -y postgresql-server postgresql-contrib; then
+    PG_SERVICE="postgresql"
+else
         echo "Default PostgreSQL package not found. Trying versioned packages..."
         PG_MAJOR="15"
         if sudo yum install -y "postgresql${PG_MAJOR}-server" "postgresql${PG_MAJOR}" "postgresql${PG_MAJOR}-contrib"; then
@@ -168,7 +168,7 @@ EOF"
     if [[ -n "$POSTGRESQL_SETUP_BIN" ]]; then
         if [[ "$POSTGRESQL_SETUP_BIN" =~ postgresql-[0-9]+-setup$ ]]; then
             if ! sudo test -f "${PG_DATA_DIR}/PG_VERSION"; then
-                sudo "$POSTGRESQL_SETUP_BIN" initdb
+                sudo "$POSTGRESQL_SETUP_BIN" initdb || true
             fi
         else
             if ! sudo test -f "${PG_DATA_DIR}/PG_VERSION"; then

@@ -18,6 +18,8 @@ if [ -f /etc/os-release ]; then
 fi
 
 PG_SERVICE="postgresql"
+PG_DATA_DIR="/var/lib/pgsql/data"
+PG_MAJOR=""
 POSTGRESQL_SETUP_BIN=""
 
 echo "Detected OS: $OS"
@@ -121,10 +123,12 @@ elif [[ "$OS" == *"Amazon"* ]] || [[ "$OS" == *"CentOS"* ]] || [[ "$OS" == *"Red
         PG_SERVICE="postgresql"
     else
         echo "Default PostgreSQL package not found. Trying versioned packages..."
-        if sudo yum install -y postgresql15-server postgresql15 postgresql15-contrib; then
-            PG_SERVICE="postgresql-15"
-            if [[ -x /usr/pgsql-15/bin/postgresql-setup ]]; then
-                POSTGRESQL_SETUP_BIN="/usr/pgsql-15/bin/postgresql-setup"
+        PG_MAJOR="15"
+        if sudo yum install -y "postgresql${PG_MAJOR}-server" "postgresql${PG_MAJOR}" "postgresql${PG_MAJOR}-contrib"; then
+            PG_SERVICE="postgresql-${PG_MAJOR}"
+            PG_DATA_DIR="/var/lib/pgsql/${PG_MAJOR}/data"
+            if [[ -x "/usr/pgsql-${PG_MAJOR}/bin/postgresql-${PG_MAJOR}-setup" ]]; then
+                POSTGRESQL_SETUP_BIN="/usr/pgsql-${PG_MAJOR}/bin/postgresql-${PG_MAJOR}-setup"
             fi
         else
             echo "Failed to install PostgreSQL packages." >&2
@@ -133,28 +137,59 @@ elif [[ "$OS" == *"Amazon"* ]] || [[ "$OS" == *"CentOS"* ]] || [[ "$OS" == *"Red
     fi
 
     if [[ -z "$POSTGRESQL_SETUP_BIN" ]]; then
+        shopt -s nullglob
+        for candidate in /usr/pgsql-*/bin/postgresql-*-setup /usr/pgsql-*/bin/postgresql-setup; do
+            if [[ -x "$candidate" ]]; then
+                POSTGRESQL_SETUP_BIN="$candidate"
+                break
+            fi
+        done
+        shopt -u nullglob
+    fi
+
+    if [[ -z "$POSTGRESQL_SETUP_BIN" ]]; then
         if command -v postgresql-setup >/dev/null 2>&1; then
             POSTGRESQL_SETUP_BIN="$(command -v postgresql-setup)"
-        else
-            SETUP_CANDIDATE=$(ls /usr/pgsql-*/bin/postgresql-setup 2>/dev/null | head -n 1 || true)
-            if [[ -n "$SETUP_CANDIDATE" ]]; then
-                POSTGRESQL_SETUP_BIN="$SETUP_CANDIDATE"
-            fi
         fi
     fi
 
+    if [[ "$PG_SERVICE" != "postgresql" ]]; then
+        sudo mkdir -p "/etc/systemd/system/${PG_SERVICE}.service.d"
+        sudo bash -c "cat > /etc/systemd/system/${PG_SERVICE}.service.d/override.conf <<EOF
+[Service]
+Environment=PGDATA=${PG_DATA_DIR}
+EOF"
+        sudo mkdir -p /etc/sysconfig/pgsql
+        sudo bash -c "cat > /etc/sysconfig/pgsql/${PG_SERVICE} <<EOF
+PGDATA=${PG_DATA_DIR}
+EOF"
+    fi
+
     if [[ -n "$POSTGRESQL_SETUP_BIN" ]]; then
-        if sudo "$POSTGRESQL_SETUP_BIN" --help 2>&1 | grep -q -- '--initdb'; then
-            if ! sudo "$POSTGRESQL_SETUP_BIN" --initdb --unit "$PG_SERVICE"; then
-                sudo "$POSTGRESQL_SETUP_BIN" --initdb
+        if [[ "$POSTGRESQL_SETUP_BIN" =~ postgresql-[0-9]+-setup$ ]]; then
+            if ! sudo test -f "${PG_DATA_DIR}/PG_VERSION"; then
+                sudo "$POSTGRESQL_SETUP_BIN" initdb
             fi
         else
-            sudo "$POSTGRESQL_SETUP_BIN" initdb
+            if ! sudo test -f "${PG_DATA_DIR}/PG_VERSION"; then
+                if sudo "$POSTGRESQL_SETUP_BIN" --help 2>&1 | grep -q -- '--initdb'; then
+                    if ! sudo "$POSTGRESQL_SETUP_BIN" --initdb --unit "$PG_SERVICE"; then
+                        sudo "$POSTGRESQL_SETUP_BIN" --initdb
+                    fi
+                else
+                    sudo "$POSTGRESQL_SETUP_BIN" initdb
+                fi
+            fi
+        fi
+    elif [[ "$PG_SERVICE" != "postgresql" ]]; then
+        if ! sudo test -f "${PG_DATA_DIR}/PG_VERSION"; then
+            sudo -u postgres "/usr/pgsql-${PG_MAJOR}/bin/initdb" -D "$PG_DATA_DIR"
         fi
     fi
 fi
 
 # Start PostgreSQL
+sudo systemctl daemon-reload
 sudo systemctl start "$PG_SERVICE"
 sudo systemctl enable "$PG_SERVICE"
 

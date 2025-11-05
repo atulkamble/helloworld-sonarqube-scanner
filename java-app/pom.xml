@@ -13,6 +13,12 @@
     <name>Hello World Java App</name>
     <description>Simple Hello World application for SonarQube analysis</description>
 
+    <developers>
+        <developer>
+            <name>Atul Kamble</name>
+        </developer>
+    </developers>
+
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>

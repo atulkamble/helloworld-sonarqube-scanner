@@ -17,6 +17,9 @@ if [ -f /etc/os-release ]; then
     OS_VERSION_ID=${VERSION_ID:-}
 fi
 
+PG_SERVICE="postgresql"
+POSTGRESQL_SETUP_BIN=""
+
 echo "Detected OS: $OS"
 
 # Update system
@@ -114,26 +117,46 @@ echo "Installing PostgreSQL..."
 if [[ "$OS" == *"Ubuntu"* ]] || [[ "$OS" == *"Debian"* ]]; then
     sudo apt-get install -y postgresql postgresql-contrib
 elif [[ "$OS" == *"Amazon"* ]] || [[ "$OS" == *"CentOS"* ]] || [[ "$OS" == *"Red Hat"* ]]; then
-    # Amazon Linux 2023 packages PostgreSQL with versioned names (postgresql15-*).
-    if [[ "$OS_ID" == "amzn" && "$OS_VERSION_ID" =~ ^2023 ]]; then
-        sudo yum install -y postgresql15-server postgresql15 postgresql15-contrib
+    if sudo yum install -y postgresql-server postgresql-contrib; then
+        PG_SERVICE="postgresql"
     else
-        sudo yum install -y postgresql-server postgresql-contrib
-    fi
-    if command -v postgresql-setup >/dev/null 2>&1; then
-        if postgresql-setup --help 2>&1 | grep -q -- '--initdb'; then
-            if ! sudo postgresql-setup --initdb --unit postgresql; then
-                sudo postgresql-setup --initdb
+        echo "Default PostgreSQL package not found. Trying versioned packages..."
+        if sudo yum install -y postgresql15-server postgresql15 postgresql15-contrib; then
+            PG_SERVICE="postgresql-15"
+            if [[ -x /usr/pgsql-15/bin/postgresql-setup ]]; then
+                POSTGRESQL_SETUP_BIN="/usr/pgsql-15/bin/postgresql-setup"
             fi
         else
-            sudo postgresql-setup initdb
+            echo "Failed to install PostgreSQL packages." >&2
+            exit 1
+        fi
+    fi
+
+    if [[ -z "$POSTGRESQL_SETUP_BIN" ]]; then
+        if command -v postgresql-setup >/dev/null 2>&1; then
+            POSTGRESQL_SETUP_BIN="$(command -v postgresql-setup)"
+        else
+            SETUP_CANDIDATE=$(ls /usr/pgsql-*/bin/postgresql-setup 2>/dev/null | head -n 1 || true)
+            if [[ -n "$SETUP_CANDIDATE" ]]; then
+                POSTGRESQL_SETUP_BIN="$SETUP_CANDIDATE"
+            fi
+        fi
+    fi
+
+    if [[ -n "$POSTGRESQL_SETUP_BIN" ]]; then
+        if sudo "$POSTGRESQL_SETUP_BIN" --help 2>&1 | grep -q -- '--initdb'; then
+            if ! sudo "$POSTGRESQL_SETUP_BIN" --initdb --unit "$PG_SERVICE"; then
+                sudo "$POSTGRESQL_SETUP_BIN" --initdb
+            fi
+        else
+            sudo "$POSTGRESQL_SETUP_BIN" initdb
         fi
     fi
 fi
 
 # Start PostgreSQL
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
+sudo systemctl start "$PG_SERVICE"
+sudo systemctl enable "$PG_SERVICE"
 
 # Create SonarQube database
 echo "Creating SonarQube database..."

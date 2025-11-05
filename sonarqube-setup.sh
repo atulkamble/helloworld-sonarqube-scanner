@@ -13,6 +13,8 @@ echo "=========================================="
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     OS=$NAME
+    OS_ID=${ID:-}
+    OS_VERSION_ID=${VERSION_ID:-}
 fi
 
 echo "Detected OS: $OS"
@@ -112,8 +114,21 @@ echo "Installing PostgreSQL..."
 if [[ "$OS" == *"Ubuntu"* ]] || [[ "$OS" == *"Debian"* ]]; then
     sudo apt-get install -y postgresql postgresql-contrib
 elif [[ "$OS" == *"Amazon"* ]] || [[ "$OS" == *"CentOS"* ]] || [[ "$OS" == *"Red Hat"* ]]; then
-    sudo yum install -y postgresql-server postgresql-contrib
-    sudo postgresql-setup initdb
+    # Amazon Linux 2023 packages PostgreSQL with versioned names (postgresql15-*).
+    if [[ "$OS_ID" == "amzn" && "$OS_VERSION_ID" =~ ^2023 ]]; then
+        sudo yum install -y postgresql15-server postgresql15 postgresql15-contrib
+    else
+        sudo yum install -y postgresql-server postgresql-contrib
+    fi
+    if command -v postgresql-setup >/dev/null 2>&1; then
+        if postgresql-setup --help 2>&1 | grep -q -- '--initdb'; then
+            if ! sudo postgresql-setup --initdb --unit postgresql; then
+                sudo postgresql-setup --initdb
+            fi
+        else
+            sudo postgresql-setup initdb
+        fi
+    fi
 fi
 
 # Start PostgreSQL

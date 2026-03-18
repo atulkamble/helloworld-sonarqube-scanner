@@ -2,6 +2,31 @@
 
 A comprehensive project demonstrating static code analysis with SonarQube across multiple programming languages (Python, Java, Node.js).
 
+```
+sqa_0691ad2a7d9aadfe8b8a7341bb5ef6d4e43df396
+
+export SONAR_HOST_URL=http://54.242.237.45:9000
+export SONAR_TOKEN=sqa_0691ad2a7d9aadfe8b8a7341bb5ef6d4e43df396
+
+sudo yum install python-pip -y
+
+git clone https://github.com/atulkamble/helloworld-sonarqube-scanner.git
+cd helloworld-sonarqube-scanner
+
+sudo dnf install git -y
+git --version
+sudo dnf install maven -y
+mvn -version
+sudo dnf install python3 python3-pip -y
+pip3 install --upgrade pip
+pip3 install pytest
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
+\. "$HOME/.nvm/nvm.sh"
+nvm install 24
+node -v 
+npm -v 
+```
+
 ## 🎯 Project Goal
 
 Create simple "Hello World" applications in Python, Java, and Node.js, and integrate SonarQube for static code analysis to monitor:

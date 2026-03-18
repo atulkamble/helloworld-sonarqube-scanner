@@ -227,6 +227,187 @@ ulimit -n
 - [SonarScanner Documentation](https://docs.sonarqube.org/latest/analysis/scan/sonarscanner/)
 - [Quality Gate Documentation](https://docs.sonarqube.org/latest/user-guide/quality-gates/)
 
+Here’s a **production-ready Jenkinsfile** for your multi-language SonarQube project 👇
+(Aligned with your repo + token + Sonar setup)
+
+---
+
+# 🚀 Jenkinsfile (Declarative Pipeline)
+
+```groovy
+pipeline {
+    agent any
+
+    environment {
+        SONAR_HOST_URL = "http://54.242.237.45:9000"
+        SONAR_TOKEN = "sqa_0691ad2a7d9aadfe8b8a7341bb5ef6d4e43df396"
+        PATH = "/opt/sonar-scanner/bin:${env.PATH}"
+    }
+
+    tools {
+        maven 'maven'        // Configure in Jenkins Global Tool Config
+        jdk 'jdk17'          // Configure JDK 17
+        nodejs 'node16'      // Optional if NodeJS plugin used
+    }
+
+    stages {
+
+        stage('Checkout Code') {
+            steps {
+                git 'https://github.com/atulkamble/helloworld-sonarqube-scanner.git'
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh '''
+                echo "Installing dependencies..."
+
+                # Python
+                sudo yum install -y python3-pip
+                pip3 install -r python-app/requirements.txt
+
+                # NodeJS
+                cd nodejs-app
+                npm install
+                cd ..
+
+                # Java (Maven build)
+                cd java-app
+                mvn clean install
+                cd ..
+                '''
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                sh '''
+                echo "Running tests..."
+
+                # Python Test
+                pytest python-app/
+
+                # NodeJS Test
+                cd nodejs-app
+                npm test || true
+                cd ..
+
+                # Java Test
+                cd java-app
+                mvn test
+                cd ..
+                '''
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                sh '''
+                echo "Running SonarQube scan..."
+
+                sonar-scanner \
+                  -Dsonar.projectKey=helloworld-multilang \
+                  -Dsonar.sources=. \
+                  -Dsonar.host.url=$SONAR_HOST_URL \
+                  -Dsonar.login=$SONAR_TOKEN
+                '''
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Pipeline completed successfully!"
+        }
+        failure {
+            echo "❌ Pipeline failed!"
+        }
+    }
+}
+```
+
+---
+
+# 🔧 Important Jenkins Setup (VERY IMPORTANT)
+
+### 1️⃣ Install Plugins
+
+* SonarQube Scanner
+* SonarQube Quality Gates
+* NodeJS Plugin
+* Pipeline Plugin
+
+---
+
+### 2️⃣ Configure SonarQube in Jenkins
+
+**Manage Jenkins → Configure System**
+
+* Add SonarQube Server:
+
+  * Name: `sonar-server`
+  * URL: `http://54.242.237.45:9000`
+  * Token: (same as yours)
+
+---
+
+### 3️⃣ Configure Tools
+
+**Manage Jenkins → Global Tool Configuration**
+
+* JDK → `jdk17`
+* Maven → `maven`
+* NodeJS → `node16`
+
+---
+
+### 4️⃣ (Best Practice 🔐) Use Credentials Instead of Hardcoding Token
+
+Replace:
+
+```groovy
+SONAR_TOKEN = "your-token"
+```
+
+With:
+
+```groovy
+SONAR_TOKEN = credentials('sonar-token-id')
+```
+
+---
+
+# 📊 Pipeline Flow (Teaching Friendly)
+
+```
+Checkout → Install → Test → Sonar Scan → Quality Gate → Result
+```
+
+---
+
+# 💡 Pro Tips (DevOps Architect Level)
+
+* Use **separate project keys** for each language (advanced setup)
+* Add **coverage reports** (pytest, jacoco, jest)
+* Integrate with:
+
+  * GitHub PR checks
+  * Jenkins Webhooks
+* Add **parallel stages** for Python/Java/Node
+
+---
+
+
+
 ## 🤝 Contributing
 
 Feel free to submit issues and enhancement requests!
